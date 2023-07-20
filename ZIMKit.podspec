@@ -24,6 +24,6 @@ Pod::Spec.new do |s|
   }
   
   s.dependency 'ZegoUIKitSignalingPlugin', '~> 2.1.1'
-  s.dependency 'Kingfisher', '~>7.6.2'
+  s.dependency 'Kingfisher', '~>7.7.0'
 
 end
