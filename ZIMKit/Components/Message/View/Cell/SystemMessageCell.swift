@@ -16,53 +16,81 @@ class SystemMessageCell: MessageCell {
     lazy var messageLabel: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
         label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 13, weight: .medium)
-        label.textColor = .zim_textGray2
+        label.font = UIFont.avenirMediumFont(ofSize: 12)
+        label.textColor = UIColor.hexColor("#666666")
         label.numberOfLines = 0
         return label
     }()
-
-    private var messageLabelTopConstraint: NSLayoutConstraint!
-    private var messageLabelHeightConstraint: NSLayoutConstraint!
+    
+    lazy var container: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.05)
+        view.layer.cornerRadius = 8
+        view.layer.masksToBounds = true
+        return view
+    }()
+    
+    lazy var handleButton: UIButton = {
+        let btn = UIButton(type: .custom)
+        btn.titleLabel?.font = UIFont.avenirHeavyFont(ofSize: 12)
+        btn.setTitleColor(UIColor.hexColor("#A569F5"), for: .normal)
+        btn.addTarget(self, action: #selector(btnAction), for: .touchUpInside)
+        return btn
+    }()
 
     override func setUp() {
         super.setUp()
     }
 
     override func setUpLayout() {
+                
         contentView.addSubview(timeLabel)
-        NSLayoutConstraint.activate([
-            timeLabel.centerXAnchor.pin(equalTo: contentView.centerXAnchor),
-            timeLabel.topAnchor.pin(equalTo: contentView.topAnchor, constant: 4),
-            timeLabel.heightAnchor.pin(equalToConstant: 16.5)
-        ])
+        timeLabel.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.top.equalToSuperview().offset(4)
+            make.height.equalTo(16.5)
+        }
+        
+        contentView.addSubview(container)
+        container.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.width.equalTo(messageVM?.contentSize.width ?? UIScreen.width-30)
+            make.height.equalTo(messageVM?.contentSize.height ?? 57.0)
+        }
 
-        contentView.addSubview(messageLabel)
-        NSLayoutConstraint.activate([
-            messageLabel.leadingAnchor.pin(equalTo: contentView.leadingAnchor, constant: 30),
-            messageLabel.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -30),
-            messageLabel.heightAnchor.pin(equalToConstant: messageVM?.contentSize.height ?? 18.0)
-        ])
-        messageLabelHeightConstraint = messageLabel.heightAnchor.pin(equalToConstant: 18.0)
-        messageLabelHeightConstraint.isActive = true
+        container.addSubview(messageLabel)
+        messageLabel.snp.makeConstraints { make in
+            make.top.leading.equalToSuperview().offset(12)
+            make.trailing.equalToSuperview().offset(-12)
+        }
+        
+        container.addSubview(handleButton)
+        handleButton.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.bottom.equalToSuperview().offset(-12)
+            make.height.equalTo(14)
+        }
+        
         updateMessageLabelConstraint()
     }
 
     private func updateMessageLabelConstraint() {
-        if messageLabelTopConstraint != nil {
-            messageLabelTopConstraint.isActive = false
-        }
-        messageLabelTopConstraint = messageLabel.topAnchor.pin(
-            equalTo: contentView.topAnchor,
-            constant: 12)
+        
         if messageVM?.isShowTime == true {
-            messageLabelTopConstraint = messageLabel.topAnchor.pin(
-                equalTo: timeLabel.bottomAnchor,
-                constant: 12)
+            container.snp.remakeConstraints { make in
+                make.centerX.equalToSuperview()
+                make.width.equalTo(messageVM?.contentSize.width ?? UIScreen.width-30)
+                make.height.equalTo(messageVM?.contentSize.height ?? 57.0)
+                make.top.equalTo(timeLabel.snp.bottom).offset(12)
+            }
+        } else {
+            container.snp.remakeConstraints { make in
+                make.centerX.equalToSuperview()
+                make.width.equalTo(messageVM?.contentSize.width ?? UIScreen.width-30)
+                make.height.equalTo(messageVM?.contentSize.height ?? 57.0)
+                make.top.equalToSuperview().offset(12)
+            }
         }
-        messageLabelTopConstraint.isActive = true
-
-        messageLabelHeightConstraint.constant = messageVM?.contentSize.height ?? 18.0
     }
 
     override func updateContent() {
@@ -70,8 +98,53 @@ class SystemMessageCell: MessageCell {
         updateMessageLabelConstraint()
 
         guard let messageVM = messageVM as? SystemMessageViewModel else { return }
-
-        messageLabel.attributedText = messageVM.attributedContent
-        timeLabel.text = timestampToMessageDateStr(messageVM.message.info.timestamp)
+        
+        handleButton.setTitle(messageVM.schemaName, for: .normal)
+        if messageVM.schema == MCRouterType.sendGift.rawValue {
+            
+            handleButton.isHidden = false
+            
+            messageLabel.snp.remakeConstraints { make in
+                make.leading.equalToSuperview().offset(12)
+                make.centerY.equalToSuperview()
+            }
+            
+            handleButton.snp.remakeConstraints { make in
+                make.centerY.equalToSuperview()
+                make.leading.equalTo(messageLabel.snp.trailing).offset(3)
+                make.height.equalTo(14)
+            }
+        } else {
+            messageLabel.snp.remakeConstraints { make in
+                make.top.leading.equalToSuperview().offset(12)
+                make.trailing.equalToSuperview().offset(-12)
+            }
+            
+            handleButton.snp.remakeConstraints { make in
+                make.centerX.equalToSuperview()
+                make.bottom.equalToSuperview().offset(-12)
+                make.height.equalTo(14)
+            }
+            
+            if messageVM.schemaName.count > 0 {
+                handleButton.isHidden = false
+                
+            } else {
+                handleButton.isHidden = true
+            }
+        }
+        
+        messageLabel.text = messageVM.content
+        timeLabel.isHidden = !messageVM.isShowTime
+        if messageVM.isShowTime {
+            timeLabel.text = timestampToMessageDateStr(messageVM.message.info.timestamp)
+        }
+                
+    }
+    
+    @objc func btnAction() {
+        guard let messageVM = messageVM as? SystemMessageViewModel else { return }
+        guard let router = MCRouterType(rawValue: messageVM.schema) else { return }
+        MCRouter.toPage(router.rawValue)
     }
 }

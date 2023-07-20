@@ -17,8 +17,9 @@ extension ZIMKit {
     
     public static func loadMoreMessage(with conversationID: String,
                                        type: ZIMConversationType,
+                                       nextMessage: ZIMMessage?,
                                        callback: LoadMoreMessageCallback? = nil) {
-        ZIMKitCore.shared.loadMoreMessage(with: conversationID, type: type, callback: callback)
+        ZIMKitCore.shared.loadMoreMessage(with: conversationID, type: type, nextMessage: nextMessage, callback: callback)
     }
     
     public static func sendTextMessage(_ text: String,

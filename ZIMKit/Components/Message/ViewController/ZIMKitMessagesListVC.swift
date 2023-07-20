@@ -7,36 +7,48 @@
 
 import UIKit
 import ZIM
+import SwiftyUserDefaults
 
 let tableHeaderHeight = 40.0
 
-open class ZIMKitMessagesListVC: _ViewController {
-
-    lazy var viewModel = MessaeListViewModel(conversationID: conversationID, conversationType)
+class ZIMKitMessagesListVC: _ViewController {
+    
+    private var userDetailInfoModel: UserDetailInfoModel?
+    
+    var onClickChatBarHandleType: ((_ chatBar: ChatBar, _ handleType: ChatHandleType) -> Void)?
+    var onUserDetailLoadCompletion: ((UserDetailInfoModel?) -> Void)?
+    
+    
+    lazy var viewModel = MessageListViewModel(conversationID: conversationID, conversationType)
     
     public weak var delegate: ZIMKitMessagesListVCDelegate?
 
     public var conversationID: String = ""
     public var conversationName: String = ""
     public var conversationType: ZIMConversationType = .peer
-    public var inputConfig: InputConfig?
-    
+    weak var chatP2pViewController: ChatP2PViewController?
+
     var firstHistoryMessageViewModel: MessageViewModel?
+    
+    private var isLoadMessageList = false
+    var isCustomerService: Bool {
+        return conversationID == "10086"
+    }
+    private var replyCountdown: Int = 0
+    private var replyTimer: Timer?
 
     /// Create a session page VC first, then you can create a session page by pushing or presenting the VC.
     /// - Parameters:
     ///   - conversationID: session ID.
     ///   - type: session type.
     ///   - conversationName: session name.
-    public convenience init(conversationID: String,
+    convenience init(conversationID: String,
                             type: ZIMConversationType,
-                            conversationName: String = "",
-                            inputConfig: InputConfig? = nil) {
+                            conversationName: String = "") {
         self.init()
         self.conversationID = conversationID
         self.conversationName = conversationName
         self.conversationType = type
-        self.inputConfig = inputConfig
     }
 
     lazy var zoomTransitionController = ZoomTransitionController()
@@ -58,13 +70,16 @@ open class ZIMKitMessagesListVC: _ViewController {
         tableView.estimatedRowHeight = 0.0
         tableView.estimatedSectionFooterHeight = 0.0
         tableView.estimatedSectionHeaderHeight = 0.0
-        tableView.contentInset = UIEdgeInsets(top: 16.0, left: 0, bottom: 0, right: 0)
-        tableView.backgroundColor = .zim_backgroundGray1
+        tableView.contentInset = UIEdgeInsets(top: 16.0, left: 0, bottom: 60, right: 0)
+        tableView.backgroundColor = .background2
         tableView.dataSource = self
         tableView.delegate = self
         tableView.tableHeaderView = indicatorView
 
         tableView.register(TextMessageCell.self, forCellReuseIdentifier: TextMessageCell.reuseId)
+        tableView.register(GiftMessageCell.self, forCellReuseIdentifier: GiftMessageCell.reuseId)
+        tableView.register(CallMessageCell.self, forCellReuseIdentifier: CallMessageCell.reuseId)
+        tableView.register(FollowMessageCell.self, forCellReuseIdentifier: FollowMessageCell.reuseId)
         tableView.register(SystemMessageCell.self, forCellReuseIdentifier: SystemMessageCell.reuseId)
         tableView.register(ImageMessageCell.self, forCellReuseIdentifier: ImageMessageCell.reuseId)
         tableView.register(AudioMessageCell.self, forCellReuseIdentifier: AudioMessageCell.reuseId)
@@ -79,7 +94,7 @@ open class ZIMKitMessagesListVC: _ViewController {
     }()
 
     lazy var chatBar: ChatBar = {
-        let chatBar = ChatBar(config: inputConfig).withoutAutoresizingMaskConstraints
+        let chatBar = ChatBar().withoutAutoresizingMaskConstraints
         chatBar.delegate = self
         return chatBar
     }()
@@ -96,7 +111,7 @@ open class ZIMKitMessagesListVC: _ViewController {
     open override func setUp() {
         super.setUp()
 
-        view.backgroundColor = .zim_backgroundGray1
+        view.backgroundColor = .background2
     }
 
     open override func setUpLayout() {
@@ -106,11 +121,16 @@ open class ZIMKitMessagesListVC: _ViewController {
         // or the navigationbar will change to translucent on ios 15.
         view.addSubview(tableView)
         view.addSubview(chatBar)
-
+        
         chatBar.pin(anchors: [.left, .right, .bottom], to: view)
-
         tableView.pin(anchors: [.left, .right, .top], to: view)
-        tableView.bottomAnchor.pin(equalTo: chatBar.topAnchor).isActive = true
+        tableView.bottomAnchor.pin(equalTo: chatBar.topAnchor, constant: 54).isActive = true
+        
+        if isCustomerService {
+            chatBar.chatHandleBar.isHidden = true
+        } else {
+            chatBar.chatHandleBar.isHidden = false
+        }
     }
 
     open override func updateContent() {
@@ -153,22 +173,6 @@ open class ZIMKitMessagesListVC: _ViewController {
             let rightItem = UIBarButtonItem(customView: rightButton)
             navigationItem.rightBarButtonItem = viewModel.isShowCheckBox ? nil : rightItem
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now()+0.2) {
-            guard let header = self.delegate?.getMessageListHeaderBar?(self) else { return }
-            
-            if let titleView = header.titleView {
-                self.navigationItem.titleView = titleView
-            }
-            
-            if let leftItems = header.leftItems {
-                self.navigationItem.leftBarButtonItems = leftItems
-            }
-            
-            if let rightItems = header.rightItems {
-                self.navigationItem.rightBarButtonItems = rightItems
-            }
-        }
     }
 
     open override func viewSafeAreaInsetsDidChange() {
@@ -179,10 +183,65 @@ open class ZIMKitMessagesListVC: _ViewController {
         super.viewDidLoad()
 
         configViewModel()
-        getMessageList()
-        loadConversationInfo()
+        
+        let group = DispatchGroup()
+        getMessageList(group: group)
+        getUserInfo(group: group)
+        group.notify(queue: DispatchQueue.main) { [weak self] in
+            self?.sendSystemMessage()
+        }
         addNotifications()
         setupNav()
+        getMsgReservationWordList()
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(reloadMsgReservationWord), name: MCNoti.handleMsgReservationWordSuccess, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(notReceiveMessageReply(_ :)), name: MCNoti.notReceiveMessageReply, object: nil)
+    }
+    
+    @objc func reloadMsgReservationWord() {
+        getMsgReservationWordList()
+    }
+    
+    @objc func notReceiveMessageReply(_ noti: Notification) {
+        
+        guard UserManager.user?.genderEnum == .male else { return }
+        let isReply = noti.object as? Bool ?? false
+        if isReply {
+            self.stopTimer()
+        } else {
+            self.startTimer()
+        }
+    }
+    
+    func startTimer() {
+        stopTimer()
+        replyTimer = Timer(timeInterval: 1, repeats: true, block: { [weak self] _ in
+            guard let self else { return }
+            self.replyCountdown += 1
+            if self.replyCountdown > 10 {
+                //发送送礼物消息
+                ZIMKitCore.shared.sendMCSystemMessage("Send her a gift, maybe she will reply".localized, router: MCRouterType.sendGift, to: self.conversationID)
+                self.stopTimer()
+            }
+        })
+        RunLoop.main.add(replyTimer!, forMode: .common)
+    }
+    
+    func stopTimer() {
+        
+        self.replyCountdown = 0
+        if let replyTimer {
+            replyTimer.invalidate()
+            self.replyTimer = nil
+        }
+    }
+    
+    
+    func getMsgReservationWordList() {
+        API.MsgReservationWord.list.fetch(modelType: [ChatPreTextModel].self).success { [weak self] response in
+            guard let self else { return }
+            self.chatBar.preTextView.setDataList(response.data ?? [], conversationId: self.conversationID)
+        }
     }
 
     deinit {
@@ -198,7 +257,7 @@ open class ZIMKitMessagesListVC: _ViewController {
     
     open override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        
+        stopTimer()
     }
     
     open override func viewDidDisappear(_ animated: Bool) {
@@ -256,14 +315,29 @@ open class ZIMKitMessagesListVC: _ViewController {
         }
     }
     
-    func getMessageList() {
+    func getUserInfo(group: DispatchGroup) {
+        group.enter()
+        let params = ["accountId": conversationID]
+        API.User.userDetail.fetch(params,modelType: UserDetailInfoModel.self).success { [weak self] response in
+            guard let self else { return }
+            self.userDetailInfoModel = response.data
+            self.onUserDetailLoadCompletion?(response.data)
+            group.leave()
+        }.failed { error in
+            group.leave()
+        }
+    }
+    
+    func getMessageList(group: DispatchGroup? = nil) {
+        
+        group?.enter()
         viewModel.getMessageList { [weak self] error in
             guard let self  = self else { return }
             
+            group?.leave()
             self.indicatorView.stopAnimating()
             if error.code != .success {
-                HUDHelper.showErrorMessageIfNeeded(error.code.rawValue,
-                                                   defaultMessage: error.message)
+                HUDHelper.showErrorMessageIfNeeded(error.code.rawValue, defaultMessage: error.message)
                 return
             }
             if self.viewModel.isNoMoreMsg {
@@ -271,9 +345,33 @@ open class ZIMKitMessagesListVC: _ViewController {
             } else {
                 self.indicatorView.h = tableHeaderHeight
             }
+            
+            if self.viewModel.messageViewModels.count == 0 {
+                ZIMKitCore.shared.sendTextMessage("👋", to: self.conversationID, type: .peer)
+            }
             self.tableView.reloadData()
             self.tableView.layoutIfNeeded()
             self.scrollToBottom(false)
+            self.showOrHideChatBar()
+            self.isLoadMessageList = true
+            
+        }
+    }
+    
+    func showOrHideChatBar() {
+        
+        let list = viewModel.messageViewModels.filter { vm in
+            vm.message.textContent.isMCSystemMessage
+        }
+        if list.count > 0 {
+            chatBar.isHidden = true
+            tableView.bottomAnchor.pin(equalTo: chatBar.topAnchor).isActive = false
+            tableView.bottomAnchor.pin(equalTo: view.bottomAnchor).isActive = true
+            chatP2pViewController?.reloadUI(hideMoreButton: true)
+        }
+        
+        if isCustomerService {
+            chatP2pViewController?.reloadUI(hideMoreButton: true)
         }
     }
 
@@ -287,31 +385,65 @@ open class ZIMKitMessagesListVC: _ViewController {
         }
 
         firstHistoryMessageViewModel = viewModel.messageViewModels.first
-        
-        viewModel.loadMoreMessages { [weak self] error in
+        let nextMessage = viewModel.messageViewModels.first?.message.zim
+        viewModel.loadMoreMessages(nextMessage) { [weak self] error in
             self?.indicatorView.stopAnimating()
             if error.code != .success {
-                HUDHelper.showErrorMessageIfNeeded(error.code.rawValue,
-                                                   defaultMessage: error.message)
+                HUDHelper.showErrorMessageIfNeeded(error.code.rawValue, defaultMessage: error.message)
                 return
             }
         }
     }
-
-    func loadConversationInfo() {
-        if conversationType == .peer {
-            viewModel.queryOtherUserInfo { [weak self] otherUser, error in
-                if error.code == .success {
-                    self?.navigationItem.title = otherUser?.name
-                    self?.conversationName = otherUser?.name ?? ""
-                }
+    
+    func sendSystemMessage() {
+        
+        guard let model = userDetailInfoModel else { return }
+        guard isLoadMessageList else { return }
+        guard !isCustomerService else { return }
+        guard !MCIMManager.shared.haveSendAuthSystemMessage(to: conversationID) else { return }
+        
+        for vm in self.viewModel.messageViewModels {
+            if vm.message.type == .system {
+                return
             }
-        } else if conversationType == .group {
-            viewModel.queryGroupInfo { [weak self] info, error in
-                if error.code == .success {
-                    self?.navigationItem.title = info?.name
-                }
+            if vm.message.textContent.isMCSystemMessage {
+                return
             }
+            if vm.message.textContent.isZegoSystemMessage {
+                return
+            }
+        }
+        //女性是否认证过（真人认证过或平台认证过）
+        var auth = false
+        if model.gender == .male {
+            if UserManager.user?.realPersonAuth == true || UserManager.user?.platformAuth == true {
+                auth = true
+            } else {
+                auth = false
+            }
+        } else {
+            if model.realPersonAuth == true || model.platformAuth {
+                auth = true
+            }
+        }
+        
+        if model.gender == .male {
+            //对方是男性
+            if !auth {
+                ZIMKitCore.shared.sendMCSystemMessage("The income is halved before passing the authentication.", router: .certifiy, to: conversationID)
+                MCIMManager.shared.saveSendAuthSystemMessageUserList(conversationID)
+            }
+            
+        } else {
+            //对方是女性
+            if auth {
+                ZIMKitCore.shared.sendMCSystemMessage("\(model.nickName~) has been authenticated, just make friends with confidence.".localized, to: conversationID)
+                
+            } else {
+                ZIMKitCore.shared.sendMCSystemMessage("\(model.nickName~) has not been authenticated, please be cautious when making friends.".localized, to: conversationID)
+            }
+            
+            MCIMManager.shared.saveSendAuthSystemMessageUserList(conversationID)
         }
     }
 }
@@ -394,7 +526,7 @@ extension ZIMKitMessagesListVC: UITableViewDelegate {
         if scrollView.contentOffset.y < minContentY && !viewModel.isNoMoreMsg {
             if !indicatorView.isAnimating {
                 indicatorView.startAnimating()
-                self.loadMoreMessages()
+//                self.loadMoreMessages()
             }
         } else {
             if indicatorView.isAnimating {
@@ -424,6 +556,18 @@ extension ZIMKitMessagesListVC: ChatBarDelegate {
 
     func chatBar(_ chatBar: ChatBar, didSendText text: String) {
         hideOptionsView()
+        
+        guard let userDetailInfoModel else { return }
+        guard !userDetailInfoModel.blocked else {
+            MCToast.show(info: "You've been blocked by the user".localized)
+            return
+        }
+        
+        guard !userDetailInfoModel.block else {
+            MCToast.show(info: "You've blocked the user".localized)
+            return
+        }
+        
         if text.isEmpty {
             let message = L10n("message_cant_send_empty_msg")
             let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
@@ -441,6 +585,18 @@ extension ZIMKitMessagesListVC: ChatBarDelegate {
     }
 
     func chatBar(_ chatBar: ChatBar, didSendAudioWith path: String, duration: UInt32) {
+        
+        guard let userDetailInfoModel else { return }
+        guard !userDetailInfoModel.blocked else {
+            MCToast.show(info: "You've been blocked by the user".localized)
+            return
+        }
+        
+        guard !userDetailInfoModel.block else {
+            MCToast.show(info: "You've blocked the user".localized)
+            return
+        }
+        
         ZIMKit.sendAudioMessage(path, duration: duration, to: conversationID, type: conversationType) { [weak self] error in
             if error.code != .success {
                 self?.showError(error)
@@ -449,6 +605,17 @@ extension ZIMKitMessagesListVC: ChatBarDelegate {
     }
 
     func chatBar(_ chatBar: ChatBar, didSelectMoreViewWith type: MoreFuncitonType) {
+        
+        guard let userDetailInfoModel else { return }
+        guard !userDetailInfoModel.blocked else {
+            MCToast.show(info: "You've been blocked by the user".localized)
+            return
+        }
+        
+        guard !userDetailInfoModel.block else {
+            MCToast.show(info: "You've blocked the user".localized)
+            return
+        }
         if type == .photo {
             selectPhotoForSend()
         } else if type == .file {
@@ -457,6 +624,18 @@ extension ZIMKitMessagesListVC: ChatBarDelegate {
     }
 
     func chatBar(_ chatBar: ChatBar, didStartToRecord recorder: AudioRecorder) {
+        
+        guard let userDetailInfoModel else { return }
+        guard !userDetailInfoModel.blocked else {
+            MCToast.show(info: "You've been blocked by the user".localized)
+            return
+        }
+        
+        guard !userDetailInfoModel.block else {
+            MCToast.show(info: "You've blocked the user".localized)
+            return
+        }
+        
         audioPlayer.stop()
     }
 
@@ -469,6 +648,10 @@ extension ZIMKitMessagesListVC: ChatBarDelegate {
                 self?.enableMultiSelect(false)
             }
         }
+    }
+    
+    func chatBarDidClickHandleItem(_ chatBar: ChatBar, handleType: ChatHandleType) {
+        onClickChatBarHandleType?(chatBar, handleType)
     }
 }
 
@@ -556,6 +739,12 @@ extension ZIMKitMessagesListVC: ImageMessageCellDelegate,
     func messageCell(_ cell: MessageCell, longPressWith message: MessageViewModel) {
         showOptionsView(cell, message)
     }
+    
+    func messageCell(_ cell: MessageCell, avatarClickWith userId: String) {
+        let vc = UserProfileViewController()
+        vc.userID = conversationID
+        navigationController?.pushViewController(vc, animated: true)
+    }
 }
 
 // MARK: - Send Messages
@@ -589,7 +778,7 @@ extension ZIMKitMessagesListVC {
 extension ZIMKitMessagesListVC {
     func scrollToBottom(_ animated: Bool) {
         if tableView.contentSize.height + view.safeAreaInsets.top > tableView.bounds.height {
-            let offset: CGPoint = .init(x: 0, y: tableView.contentSize.height-tableView.frame.size.height)
+            let offset: CGPoint = .init(x: 0, y: tableView.contentSize.height-tableView.frame.size.height+60)
             tableView.setContentOffset(offset, animated: animated)
         }
     }
@@ -613,6 +802,9 @@ extension ZIMKitMessagesListVC {
                     error.code.rawValue,
                     defaultMessage: L10n("message_file_size_err_tips"))
             }
+        } else if error.code == .messageModuleAuditRejected {
+            
+            MCToast.show(info: "Sensitive characters detected".localized)
         } else {
             HUDHelper.showErrorMessageIfNeeded(
                 error.code.rawValue,

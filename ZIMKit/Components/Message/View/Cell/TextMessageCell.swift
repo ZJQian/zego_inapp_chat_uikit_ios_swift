@@ -22,11 +22,17 @@ class TextMessageCell: BubbleMessageCell {
 
     override func setUp() {
         super.setUp()
+        
+
     }
 
     override func setUpLayout() {
         super.setUpLayout()
         updateMessageLabelConstraint()
+        
+        bubbleView.isUserInteractionEnabled = true
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapLinkAction(_ :)))
+        bubbleView.addGestureRecognizer(tap)
     }
 
     private func updateMessageLabelConstraint() {
@@ -38,6 +44,7 @@ class TextMessageCell: BubbleMessageCell {
             trailing: insets.right)
         messageLabel.removeFromSuperview()
         bubbleView.embed(messageLabel, insets: directionInsets)
+        
     }
 
     override func updateContent() {
@@ -47,7 +54,14 @@ class TextMessageCell: BubbleMessageCell {
         updateMessageLabelConstraint()
 
         messageLabel.attributedText = messageVM.attributedContent
-        messageLabel.textColor = messageVM.cellConfig.messageTextColor
+//        messageLabel.textColor = messageVM.cellConfig.messageTextColor
         messageLabel.font = messageVM.cellConfig.messageTextFont
+    }
+    
+    @objc func tapLinkAction(_ sender: UITapGestureRecognizer) {
+        guard let messageVM = messageVM as? TextMessageViewModel else { return }
+        if let schema = messageVM.message.textContent.content.dictionaryValue["schema"] as? String, let decodeStr = schema.removingPercentEncoding {
+            MCRouter.toPage(decodeStr)
+        }
     }
 }

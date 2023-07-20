@@ -16,10 +16,12 @@ extension ZIMKit {
     public static func connectUser(userID: String,
                                    userName: String? = nil,
                                    avatarUrl: String? = nil,
+                                   token: String?,
                                    callback: ConnectUserCallback? = nil) {
         ZIMKitCore.shared.connectUser(userID: userID,
                                       userName: userName,
                                       avatarUrl: avatarUrl,
+                                      token: token,
                                       callback: callback)
     }
     

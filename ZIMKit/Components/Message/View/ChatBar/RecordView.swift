@@ -36,8 +36,8 @@ class RecordView: _View {
         return label
     }()
 
-    lazy var voiceImageView: AnimatedImageView = {
-        let imageView = AnimatedImageView().withoutAutoresizingMaskConstraints
+    lazy var voiceImageView: ZIMAnimatedImageView = {
+        let imageView = ZIMAnimatedImageView().withoutAutoresizingMaskConstraints
         return imageView
     }()
 

@@ -30,6 +30,6 @@ class AudioMessageViewModel: MediaMessageViewModel {
         let minW = 70.0
         var w = minW + (maxW - minW) * Double(message.audioContent.duration) / 60.0
         w = min(w, maxW)
-        return CGSize(width: w, height: 43)
+        return CGSize(width: w, height: 50)
     }
 }

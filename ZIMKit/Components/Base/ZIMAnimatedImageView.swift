@@ -8,7 +8,7 @@
 import Foundation
 import Kingfisher
 
-class AnimatedImageView: Kingfisher.AnimatedImageView {
+class ZIMAnimatedImageView: Kingfisher.AnimatedImageView {
     func animated(withPath path: String) {
         let provider = LocalFileImageDataProvider(fileURL: URL(fileURLWithPath: path))
         kf.setImage(with: provider)

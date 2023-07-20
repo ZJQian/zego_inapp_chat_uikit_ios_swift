@@ -11,7 +11,7 @@ class UnReadBubble: _View {
     lazy var label: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
         label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 9, weight: .regular)
+        label.font = UIFont.avenirHeavyFont(ofSize: 13)
         label.textColor = .zim_textWhite
         label.text = "12"
         label.sizeToFit()
@@ -22,8 +22,8 @@ class UnReadBubble: _View {
     override func setUp() {
         super.setUp()
 
-        backgroundColor = .zim_backgroundRed
-        layer.cornerRadius = 10.0
+        backgroundColor = .hexColor("#FD2D55")
+        layer.cornerRadius = 9.0
         layer.masksToBounds = true
         isHidden = true
     }

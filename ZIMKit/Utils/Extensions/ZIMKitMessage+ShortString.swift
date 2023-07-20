@@ -13,7 +13,9 @@ extension ZIMKitMessage {
         var shortStr = ""
         switch self.type {
         case .text:
-            shortStr = self.textContent.content
+            
+            shortStr = textContent.des.conversationListDes
+
         case .image:
             shortStr = L10n("common_message_photo")
         case .audio:
@@ -22,6 +24,8 @@ extension ZIMKitMessage {
             shortStr = L10n("common_message_video")
         case .file:
             shortStr = L10n("common_message_file")
+        case .system:
+            shortStr = "[\("system message".localized)]"
         default:
             shortStr = L10n("common_message_unknown")
         }

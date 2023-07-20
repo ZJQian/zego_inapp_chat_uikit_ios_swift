@@ -46,6 +46,13 @@ extension ZIMKitCore {
         })
     }
     
+    func deleteMessages(by conversationID: String, callback: @escaping ZIMMessageDeletedCallback) {
+        
+        let config = ZIMMessageDeleteConfig()
+        config.isAlsoDeleteServerMessage = true
+        zim?.deleteAllMessage(by: conversationID, conversationType: .peer, config: config, callback: callback)
+    }
+    
     func clearUnreadCount(for conversationID: String,
                           type: ZIMConversationType,
                           callback: ClearUnreadCountCallback? = nil) {

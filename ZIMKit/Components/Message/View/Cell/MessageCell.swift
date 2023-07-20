@@ -9,6 +9,11 @@ import Foundation
 
 protocol MessageCellDelegate: AnyObject {
     func messageCell(_ cell: MessageCell, longPressWith messageViewModel: MessageViewModel)
+    func messageCell(_ cell: MessageCell, avatarClickWith userId: String)
+}
+
+extension MessageCellDelegate {
+    func messageCell(_ cell: MessageCell, avatarClickWith messageViewModel: MessageViewModel) {}
 }
 
 class MessageCell: _TableViewCell {
@@ -20,16 +25,17 @@ class MessageCell: _TableViewCell {
     lazy var timeLabel: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
         label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 12, weight: .medium)
-        label.textColor = .zim_textGray2
+        label.font = UIFont.avenirNextMediumFont(ofSize: 12)
+        label.textColor = UIColor.black.withAlphaComponent(0.4)
         return label
     }()
 
     lazy var avatarImageView: UIImageView = {
         let imageView = UIImageView().withoutAutoresizingMaskConstraints
         imageView.contentMode = .scaleAspectFit
-        imageView.image = loadImageSafely(with: "avatar_default")
-        imageView.layer.cornerRadius = 8.0
+        imageView.isUserInteractionEnabled = true
+        imageView.image = UIImage(named: "icon_avatar_default")
+        imageView.layer.cornerRadius = 25.0
         imageView.layer.masksToBounds = true
         return imageView
     }()
@@ -110,8 +116,12 @@ class MessageCell: _TableViewCell {
         ])
 
         contentView.addSubview(avatarImageView)
-        avatarImageView.pin(to: 43.0)
+        avatarImageView.pin(to: 50.0)
         updateAvatarConstraint()
+        
+        let avatarTap = UITapGestureRecognizer(target: self, action: #selector(avatarTapAction))
+        avatarImageView.addGestureRecognizer(avatarTap)
+        
 
         contentView.addSubview(selectIcon)
         selectIcon.pin(to: 23.0)
@@ -162,12 +172,12 @@ class MessageCell: _TableViewCell {
                 equalTo: timeLabel.bottomAnchor,
                 constant: 12)
         }
-        let leadingConstant = messageVM?.isShowCheckBox == true ? 39.0 : 8.0
+        let leadingConstant = messageVM?.isShowCheckBox == true ? 39.0 : 15.0
         avatarHorizontalConstraint = avatarImageView.leadingAnchor.pin(
             equalTo: contentView.leadingAnchor,
             constant: leadingConstant)
         if messageVM?.message.info.direction == .send {
-            avatarHorizontalConstraint =  avatarImageView.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -8)
+            avatarHorizontalConstraint =  avatarImageView.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -15)
         }
         avatarTopConstraint.isActive = true
         avatarHorizontalConstraint.isActive = true
@@ -205,6 +215,7 @@ class MessageCell: _TableViewCell {
         if containerHorizontalConstraint != nil {
             containerHorizontalConstraint.isActive = false
         }
+        
         containerTopConstraint = containerView.topAnchor.pin(equalTo: avatarImageView.topAnchor)
         if messageVM?.isShowName == true {
             containerTopConstraint = containerView.topAnchor.pin(
@@ -215,13 +226,14 @@ class MessageCell: _TableViewCell {
 
         containerHorizontalConstraint = containerView.leadingAnchor.pin(
             equalTo: avatarImageView.trailingAnchor,
-            constant: 12)
+            constant: 13)
         if messageVM?.message.info.direction == .send {
             containerHorizontalConstraint = containerView.trailingAnchor.pin(
                 equalTo: avatarImageView.leadingAnchor,
-                constant: -12)
+                constant: -13)
         }
         containerHorizontalConstraint.isActive = true
+        
     }
 
     private func updateRetryButtonConstraint() {
@@ -278,7 +290,7 @@ class MessageCell: _TableViewCell {
         guard let messageVM = messageVM else { return }
         let message = messageVM.message
         
-        avatarImageView.loadImage(with: message.info.senderUserAvatarUrl, placeholder: "avatar_default")
+        avatarImageView.loadImage(with: message.info.senderUserAvatarUrl, placeholder: "icon_avatar_placeholder")
         
         nameLabel.isHidden = !messageVM.isShowName
         if messageVM.isShowName {
@@ -304,5 +316,11 @@ extension MessageCell {
             with: message.isSelected
                 ? "message_multiSelect_selected"
                 : "message_multiSelect_normal")
+    }
+    
+    @objc func avatarTapAction() {
+        
+        guard let message = messageVM, message.message.info.direction == .receive else { return }
+        delegate?.messageCell(self, avatarClickWith: message.message.info.senderUserID)
     }
 }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-@objc public protocol ZIMKitMessagesListVCDelegate: AnyObject {
+@objc protocol ZIMKitMessagesListVCDelegate: AnyObject {
     @objc optional
     func getMessageListHeaderBar(_ messageListVC: ZIMKitMessagesListVC) -> ZIMKitHeaderBar?
 }

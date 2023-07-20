@@ -9,7 +9,7 @@ import Foundation
 import ZIM
 import UIKit
 
-class MessaeListViewModel: NSObject {
+class MessageListViewModel: NSObject {
 
     /// The handle queue when receive or query messages.
     var handleMessageQueue = DispatchQueue(label: "com.zegocloud.imkit.handleMessageQueue")
@@ -38,7 +38,7 @@ class MessaeListViewModel: NSObject {
 }
 
 // MARK: - Public
-extension MessaeListViewModel {
+extension MessageListViewModel {
     
     func getMessageList(_ callback: ((ZIMError) -> Void)?) {
         isLoadingData = true
@@ -49,10 +49,12 @@ extension MessaeListViewModel {
                 return
             }
             guard let self = self else { return }
-            self.handleMessageQueue.async {
+            self.handleMessageQueue.async { [weak self]  in
+                guard let self else { return }
                 self.isNoMoreMsg = !hasMoreHistoryMessage
                 self.handleLoadedHistoryMessages(messages)
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
                     callback?(error)
                     self.isLoadingData = false
                 }
@@ -60,10 +62,10 @@ extension MessaeListViewModel {
         }
     }
     
-    func loadMoreMessages(_ callback: ((ZIMError) -> Void)?) {
+    func loadMoreMessages(_ nextMessage: ZIMMessage?, _ callback: ((ZIMError) -> Void)?) {
         if isLoadingData { return }
         isLoadingData = true
-        ZIMKit.loadMoreMessage(with: conversationID, type: conversationType) { [weak self] error in
+        ZIMKit.loadMoreMessage(with: conversationID, type: conversationType, nextMessage: nextMessage) { [weak self] error in
             self?.isLoadingData = false
             callback?(error)
         }
@@ -146,7 +148,7 @@ extension MessaeListViewModel {
 }
 
 // MARK: - Private
-extension MessaeListViewModel {
+extension MessageListViewModel {
     
     private func handleReceiveNewMessages(_ messageList: [ZIMKitMessage]) {
 
@@ -157,6 +159,7 @@ extension MessaeListViewModel {
             var newMessages: [MessageViewModel] = []
             var lastMessage = self.messageViewModels.last
             for msg in messageList {
+                
                 let model = MessageViewModelFactory.createMessage(with: msg)
                 model.setNeedShowTime(lastMessage?.message.info.timestamp)
                 model.setCellHeight()
@@ -241,7 +244,7 @@ extension MessaeListViewModel {
 }
 
 // MARK: - ZIMEventHandler
-extension MessaeListViewModel: ZIMKitDelegate {
+extension MessageListViewModel: ZIMKitDelegate {
     
     func onConnectionStateChange(_ state: ZIMConnectionState, _ event: ZIMConnectionEvent) {
         self.connectionEvent = event
@@ -252,7 +255,11 @@ extension MessaeListViewModel: ZIMKitDelegate {
             return
         }
         if messages.count == 0 { return }
-        handleReceiveNewMessages(messages)
+        let list = messages.filter { msg in
+            !msg.textContent.isZegoSystemMessage
+        }
+        handleReceiveNewMessages(list)
+        NotificationCenter.default.post(name: MCNoti.notReceiveMessageReply, object: true)
     }
     
     func onHistoryMessageLoaded(_ conversationID: String, type: ZIMConversationType, messages: [ZIMKitMessage]) {
@@ -260,7 +267,7 @@ extension MessaeListViewModel: ZIMKitDelegate {
             return
         }
 
-        if messages.count == 0 {
+        if messages.count < queryMessagePageCount {
             isNoMoreMsg = true
         }
         handleMessageQueue.async {
@@ -288,7 +295,18 @@ extension MessaeListViewModel: ZIMKitDelegate {
         }
         if message.info.sentStatus == .sending {
             handleReceiveNewMessages([message])
+            
+            if !message.textContent.isZegoSystemMessage, !message.textContent.isCustomMessage {
+                NotificationCenter.default.post(name: MCNoti.notReceiveMessageReply, object: false)
+            }
+            
         } else {
+            if message.type == .system {
+                handleReceiveNewMessages([message])
+            }
+            if message.textContent.isZegoSystemMessage {
+                handleReceiveNewMessages([message])
+            }
             handleSentCallback(message)
         }
     }

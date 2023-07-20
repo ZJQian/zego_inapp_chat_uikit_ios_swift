@@ -14,7 +14,7 @@ let MessageCell_Time_To_Avatar = 12.0
 let MessageCell_Name_Height = 15.0
 let MessageCell_Name_To_Content = 2.0
 let MessageCell_Bottom_Margin = 16.0
-let MessageCell_Default_Content_Height = 21.0
+let MessageCell_Default_Content_Height = 24.0
 
 class MessageViewModel: Equatable {
     static func == (lhs: MessageViewModel, rhs: MessageViewModel) -> Bool {
@@ -37,7 +37,21 @@ class MessageViewModel: Equatable {
     var reuseIdentifier: String {
         switch message.type {
         case .text:
-            return TextMessageCell.reuseId
+            switch message.textContent.des.msgType {
+            case .gift:
+                return GiftMessageCell.reuseId
+            case .videoCall,
+                    .voiceCall,
+                    .callCancel,
+                    .callReject:
+                return CallMessageCell.reuseId
+            case .follow:
+                return FollowMessageCell.reuseId
+            case .zegoSystem:
+                return SystemMessageCell.reuseId
+            default:
+                return TextMessageCell.reuseId
+            }
         case .image:
             return ImageMessageCell.reuseId
         case .system:
@@ -60,9 +74,16 @@ class MessageViewModel: Equatable {
         message = msg
 
         // update cell config
-        cellConfig.messageTextColor = msg.info.direction == .send ? .zim_textWhite : .zim_textBlack1
-        if message.type == .text || message.type == .unknown {
-            cellConfig.contentInsets = UIEdgeInsets(top: 11, left: 12, bottom: 11, right: 12)
+        cellConfig.messageTextColor = msg.info.direction == .send ? .black : .black
+        if message.type == .text {
+            
+            if message.textContent.isCustomMessage {
+                
+            } else {
+                cellConfig.contentInsets = UIEdgeInsets(top: 14.5, left: 12, bottom: 14.5, right: 12)
+            }
+        } else if message.type == .unknown {
+            cellConfig.contentInsets = UIEdgeInsets(top: 14.5, left: 12, bottom: 14.5, right: 12)
         }
     }
 

@@ -16,24 +16,24 @@ class ConversationCell: _TableViewCell {
     lazy var titleLabel: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
         label.textAlignment = .left
-        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-        label.textColor = .zim_textBlack1
+        label.font = UIFont.avenirHeavyFont(ofSize: 18)
+        label.textColor = .title
         return label
     }()
 
     lazy var subTitleLabel: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
         label.textAlignment = .left
-        label.font = UIFont.systemFont(ofSize: 12, weight: .regular)
-        label.textColor = .zim_textGray1
+        label.font = UIFont.avenirBookFont(ofSize: 13)
+        label.textColor = .title.withAlphaComponent(0.6)
         return label
     }()
 
     lazy var timeLabel: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
         label.textAlignment = .right
-        label.font = UIFont.systemFont(ofSize: 10, weight: .regular)
-        label.textColor = .zim_textGray2
+        label.font = UIFont.avenirNextRegularFont(ofSize: 12)
+        label.textColor = .title.withAlphaComponent(0.6)
         return label
     }()
 
@@ -47,7 +47,7 @@ class ConversationCell: _TableViewCell {
 
     lazy var line: UIView = {
         let view = UIView().withoutAutoresizingMaskConstraints
-        view.backgroundColor = .zim_backgroundGray3
+        view.backgroundColor = .clear
         contentView.addSubview(view)
         return view
     }()
@@ -78,10 +78,12 @@ class ConversationCell: _TableViewCell {
         contentView.addSubview(unReadBubble)
         contentView.addSubview(msgFailImageView)
 
+        headImageView.layer.cornerRadius = 30.0
+        headImageView.layer.masksToBounds = true
         headImageView.leadingAnchor.pin(
             equalTo: contentView.leadingAnchor,
-            constant: 15).isActive = true
-        headImageView.pin(to: 44.0)
+            constant: 16).isActive = true
+        headImageView.pin(to: 60.0)
         headImageView.pin(anchors: [.centerY], to: contentView)
 
         NSLayoutConstraint.activate([
@@ -90,25 +92,25 @@ class ConversationCell: _TableViewCell {
                 constant: 11),
             titleLabel.topAnchor.pin(
                 equalTo: contentView.topAnchor,
-                constant: 15.5),
+                constant: 23.5),
             titleLabel.trailingAnchor.pin(
                 equalTo: timeLabel.leadingAnchor,
                 constant: -16),
-            titleLabel.heightAnchor.pin(equalToConstant: 22.5)
+            titleLabel.heightAnchor.pin(equalToConstant: 24.5)
         ])
 
         subtitleLeadingConstraint = subTitleLabel.leadingAnchor.pin(equalTo: titleLabel.leadingAnchor)
         NSLayoutConstraint.activate([
             subtitleLeadingConstraint,
-            subTitleLabel.topAnchor.pin(equalTo: titleLabel.bottomAnchor, constant: 4),
-            subTitleLabel.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -16),
-            subTitleLabel.heightAnchor.pin(equalToConstant: 16.5)
+            subTitleLabel.topAnchor.pin(equalTo: titleLabel.bottomAnchor, constant: 7),
+            subTitleLabel.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -40),
+            subTitleLabel.heightAnchor.pin(equalToConstant: 18)
         ])
 
         NSLayoutConstraint.activate([
-            timeLabel.topAnchor.pin(equalTo: contentView.topAnchor, constant: 20),
+            timeLabel.topAnchor.pin(equalTo: contentView.topAnchor, constant: 23.5),
             timeLabel.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -16),
-            timeLabel.heightAnchor.pin(equalToConstant: 14.0)
+            timeLabel.heightAnchor.pin(equalToConstant: 16.5)
         ])
 
         NSLayoutConstraint.activate([
@@ -117,16 +119,22 @@ class ConversationCell: _TableViewCell {
         ])
         line.pin(anchors: [.trailing, .bottom], to: contentView)
 
-        unReadBubble.leadingAnchor.pin(
-            equalTo: contentView.leadingAnchor,
-            constant: 46).isActive = true
-        unReadBubble.topAnchor.pin(
-            equalTo: contentView.topAnchor,
-            constant: 11).isActive = true
-        unReadBubble.pin(to: 20.0)
+        NSLayoutConstraint.activate([
+            unReadBubble.centerYAnchor.pin(equalTo: subTitleLabel.centerYAnchor, constant: -2),
+            unReadBubble.trailingAnchor.pin(equalTo: contentView.trailingAnchor, constant: -16),
+        ])
+        unReadBubble.pin(to: 18.0)
+        
+//        unReadBubble.leadingAnchor.pin(
+//            equalTo: contentView.leadingAnchor,
+//            constant: 46).isActive = true
+//        unReadBubble.topAnchor.pin(
+//            equalTo: contentView.topAnchor,
+//            constant: 11).isActive = true
+//        unReadBubble.pin(to: 20.0)
 
         msgFailImageView.leadingAnchor.pin(equalTo: titleLabel.leadingAnchor).isActive = true
-        msgFailImageView.topAnchor.pin(equalTo: titleLabel.bottomAnchor, constant: 3.5).isActive = true
+        msgFailImageView.topAnchor.pin(equalTo: titleLabel.bottomAnchor, constant: 7).isActive = true
         msgFailImageView.pin(to: 16.5)
     }
 
@@ -136,7 +144,7 @@ class ConversationCell: _TableViewCell {
         guard let model = model else { return }
 
         // load image
-        var placeHolder = "avatar_default"
+        var placeHolder = "icon_avatar_placeholder"
         if model.type == .group {
             placeHolder = "groupAvatar_default"
         }

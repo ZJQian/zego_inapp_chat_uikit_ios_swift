@@ -7,7 +7,7 @@
 
 import Foundation
 
-@objc public protocol ZIMKitConversationListVCDelegate: AnyObject {
+@objc protocol ZIMKitConversationListVCDelegate: AnyObject {
     
     @objc optional
     func conversationList(_ conversationListVC: ZIMKitConversationListVC,

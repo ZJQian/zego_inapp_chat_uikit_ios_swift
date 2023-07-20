@@ -7,7 +7,6 @@
 
 import Foundation
 import ZIM
-import ZegoUIKitSignalingPlugin
 
 class ZIMKitCore: NSObject {
     static let shared = ZIMKitCore()

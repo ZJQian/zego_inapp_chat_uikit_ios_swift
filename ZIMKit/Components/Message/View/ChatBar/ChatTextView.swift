@@ -36,7 +36,7 @@ class ChatTextView: _View {
         let textView = TextView().withoutAutoresizingMaskConstraints
         textView.font = UIFont.systemFont(ofSize: 16)
         textView.textColor = .zim_textBlack1
-        textView.backgroundColor = .zim_backgroundGray1
+        textView.backgroundColor = .zim_backgroundWhite
         textView.returnKeyType = .send
         return textView
     }()
@@ -44,8 +44,8 @@ class ChatTextView: _View {
     override func setUp() {
         super.setUp()
 
-        backgroundColor = .zim_backgroundGray1
-        layer.cornerRadius = 12.0
+        backgroundColor = .zim_backgroundWhite
+        layer.cornerRadius = 6.0
         layer.masksToBounds = true
     }
 

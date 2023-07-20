@@ -49,13 +49,13 @@ extension NavigationController {
     }
 }
 
-extension NavigationController: UIGestureRecognizerDelegate {
-    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if gestureRecognizer == interactivePopGestureRecognizer {
-            if visibleViewController == viewControllers.first {
-                return false
-            }
-        }
-        return true
-    }
-}
+//extension NavigationController: UIGestureRecognizerDelegate {
+//    public override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+//        if gestureRecognizer == interactivePopGestureRecognizer {
+//            if visibleViewController == viewControllers.first {
+//                return false
+//            }
+//        }
+//        return true
+//    }
+//}

@@ -24,7 +24,7 @@ class AudioMessageCell: BubbleMessageCell {
 
     lazy var durationLabel: UILabel = {
         let label = UILabel().withoutAutoresizingMaskConstraints
-        label.font = .systemFont(ofSize: 15, weight: .medium)
+        label.font = .avenirNextMediumFont(ofSize: 14)
         label.textAlignment = .left
         return label
     }()
@@ -57,7 +57,7 @@ class AudioMessageCell: BubbleMessageCell {
         bubbleView.addSubview(iconImageView)
         bubbleView.addSubview(durationLabel)
 
-        iconImageView.pin(to: 22)
+        iconImageView.pin(to: 20)
         iconImageView.pin(anchors: [.centerY], to: bubbleView)
 
         durationLabel.pin(anchors: [.centerY], to: bubbleView)

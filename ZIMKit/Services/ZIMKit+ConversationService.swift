@@ -22,6 +22,10 @@ extension ZIMKit {
                                              callback: callback)
     }
     
+    public static func deleteMessages(by conversationID: String, callback: @escaping ZIMMessageDeletedCallback) {
+        ZIMKitCore.shared.deleteMessages(by: conversationID, callback: callback)
+    }
+    
     public static func clearUnreadCount(for conversationID: String,
                                         type: ZIMConversationType,
                                         callback: ClearUnreadCountCallback? = nil) {

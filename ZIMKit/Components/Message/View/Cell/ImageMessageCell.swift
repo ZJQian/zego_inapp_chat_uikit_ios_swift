@@ -17,8 +17,8 @@ class ImageMessageCell: MessageCell {
         String(describing: ImageMessageCell.self)
     }
 
-    lazy var thumbnailImageView: AnimatedImageView = {
-        let imageView = AnimatedImageView().withoutAutoresizingMaskConstraints
+    lazy var thumbnailImageView: ZIMAnimatedImageView = {
+        let imageView = ZIMAnimatedImageView().withoutAutoresizingMaskConstraints
         imageView.isUserInteractionEnabled = true
         imageView.layer.cornerRadius = 5.0
         imageView.layer.masksToBounds = true
@@ -58,7 +58,7 @@ class ImageMessageCell: MessageCell {
         
         updateImageConstraint()
 
-        let placeHolder = "chat_image_fail_bg"
+        let placeHolder = "icon_default"
         let path = message.imageContent.thumbnailDownloadUrl.count > 0
         ? message.imageContent.thumbnailDownloadUrl
             : message.fileLocalPath

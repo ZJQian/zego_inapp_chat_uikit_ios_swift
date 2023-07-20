@@ -113,10 +113,10 @@ class MessageOptionsView: _View {
                             icon: "message_option_delete",
                             title: L10n("conversation_delete"),
                             type: .delete))
-        dataSource.append(Content(
-                            icon: "message_option_select",
-                            title: L10n("message_multi_select"),
-                            type: .select))
+//        dataSource.append(Content(
+//                            icon: "message_option_select",
+//                            title: L10n("message_multi_select"),
+//                            type: .select))
 
         collectionView.reloadData()
 

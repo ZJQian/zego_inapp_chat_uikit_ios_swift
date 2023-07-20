@@ -18,7 +18,7 @@ extension UIImageView {
     ) {
         var defaultImage: UIImage?
         if let placeholder = placeholder {
-            defaultImage = loadImageSafely(with: placeholder)
+            defaultImage = UIImage(named: placeholder)
         }
         self.loadImage(
             with: imageName,
@@ -37,8 +37,8 @@ extension UIImageView {
     ) {
         let url: URL? = imageName != nil ? URL(string: imageName!) : nil
         var options: KingfisherOptionsInfo = [
-            .transition(.fade(0.25)),
-            .backgroundDecode
+//            .transition(.fade(0.25)),
+//            .backgroundDecode
         ]
         if maxSize != .zero && isResize == true {
             //            let processor = DownsamplingImageProcessor(size: maxSize)

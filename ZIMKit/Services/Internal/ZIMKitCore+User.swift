@@ -12,12 +12,13 @@ extension ZIMKitCore {
     func connectUser(userID: String,
                      userName: String? = nil,
                      avatarUrl: String? = nil,
+                     token: String?,
                      callback: ConnectUserCallback? = nil) {
         assert(zim != nil, "Must create ZIM first!!!")
         let zimUserInfo = ZIMUserInfo()
         zimUserInfo.userID = userID
         zimUserInfo.userName = userName ?? ""
-        zim?.login(with: zimUserInfo) { [weak self] error in
+        zim?.login(with: zimUserInfo, token: token~, callback: { [weak self] error in
             if error.code == .networkModuleUserHasAlreadyLogged {
                 error.code = .success
                 error.message = ""
@@ -30,7 +31,7 @@ extension ZIMKitCore {
                 self?.updateUserAvatarUrl(userAvatarUrl, callback: nil)
             }
             callback?(error)
-        }
+        })
     }
     
     func disconnectUser() {

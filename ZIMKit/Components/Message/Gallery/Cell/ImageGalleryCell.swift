@@ -11,8 +11,8 @@ import simd
 class ImageGalleryCell: GalleryCollectionViewCell {
     class var reuseId: String { String(describing: self) }
 
-    private(set) lazy var imageView: AnimatedImageView = {
-        let imageView = AnimatedImageView().withoutAutoresizingMaskConstraints
+    private(set) lazy var imageView: ZIMAnimatedImageView = {
+        let imageView = ZIMAnimatedImageView().withoutAutoresizingMaskConstraints
         imageView.clipsToBounds = true
         imageView.contentMode = .scaleAspectFit
         return imageView

@@ -7,6 +7,7 @@
 
 import Foundation
 import ZIM
+import SwiftyUserDefaults
 
 let queryMessagePageCount = 30
 
@@ -14,45 +15,118 @@ extension ZIMKitCore {
     func getMessageList(with conversationID: String,
                         type: ZIMConversationType,
                         callback: GetMessageListCallback? = nil) {
-        let messages = messageList.get(conversationID, type: type)
-        if messages.count >= queryMessagePageCount {
-            let error = ZIMError()
-            error.code = .success
-            callback?(messages, true, error)
-        } else {
-            loadMoreMessage(with: conversationID, type: type, isCallbackListChanged: false) { error in
-                let messages = self.messageList.get(conversationID, type: type)
-                let hasMore: Bool = messages.count >= queryMessagePageCount
-                callback?(messages, hasMore, error)
+//        var messages = messageList.get(conversationID, type: type)
+//        messages.removeAll()
+//        if messages.count >= queryMessagePageCount {
+//            let error = ZIMError()
+//            error.code = .success
+//            callback?(messages, true, error)
+//        } else {
+//            loadMoreMessage(with: conversationID, type: type, isCallbackListChanged: false, nextMessage: nil) { [weak self] error in
+//                let messages = self?.messageList.get(conversationID, type: type) ?? []
+//                let hasMore: Bool = messages.count >= queryMessagePageCount
+//                callback?(messages, hasMore, error)
+//            }
+//        }
+        
+
+        let config = ZIMMessageQueryConfig()
+        config.count = UInt32(queryMessagePageCount)
+        config.reverse = true
+
+        zim?.queryHistoryMessage(by: conversationID, conversationType: type, config: config, callback: { [weak self] _, _, zimMessages, error in
+
+            let kitMessages = zimMessages.compactMap({ ZIMKitMessage(with: $0) })
+            for kitMessage in kitMessages {
+                self?.updateKitMessageProperties(kitMessage)
+                self?.updateKitMessageMediaProperties(kitMessage)
             }
-        }
+            let hasMore: Bool = kitMessages.count >= queryMessagePageCount
+            callback?(kitMessages, hasMore, error)
+        })
+
     }
     
     func loadMoreMessage(with conversationID: String,
                          type: ZIMConversationType,
                          isCallbackListChanged: Bool = true,
+                         nextMessage: ZIMMessage?,
                          callback: LoadMoreMessageCallback? = nil) {
-        let messages = self.messageList.get(conversationID, type: type)
         let config = ZIMMessageQueryConfig()
         config.count = UInt32(queryMessagePageCount)
-        config.nextMessage = messages.first?.zim
+        config.nextMessage = nextMessage
         config.reverse = true
         
-        zim?.queryHistoryMessage(by: conversationID, conversationType: type, config: config, callback: { _, _, zimMessages, error in
+        zim?.queryHistoryMessage(by: conversationID, conversationType: type, config: config, callback: { [weak self] _, _, zimMessages, error in
             let kitMessages = zimMessages.compactMap({ ZIMKitMessage(with: $0) })
             for kitMessage in kitMessages {
-                self.updateKitMessageProperties(kitMessage)
-                self.updateKitMessageMediaProperties(kitMessage)
+                self?.updateKitMessageProperties(kitMessage)
+                self?.updateKitMessageMediaProperties(kitMessage)
             }
-            self.messageList.add(kitMessages, isNewMessage: false)
+//            self?.messageList.add(kitMessages, isNewMessage: false)
             
             callback?(error)
             if isCallbackListChanged == false { return }
-            for delegate in self.delegates.allObjects {
+            for delegate in self?.delegates.allObjects ?? [] {
                 delegate.onHistoryMessageLoaded?(conversationID, type: type, messages: kitMessages)
             }
         })
     }
+    
+    
+    func sendMCSystemMessage(_ text: String,
+                           router: MCRouterType? = nil,
+                           to conversationID: String,
+                           callback: MessageSentCallback? = nil) {
+        
+        
+        var params = ["message": text,
+                      "msgType": MCMessageType.zegoSystem.rawValue]
+        if let router {
+            params["schema"] = router.rawValue
+            params["schemaName"] = router.btnTitle
+        }
+        
+        let message = ZIMTextMessage(message: params.jsonString)
+        
+        var kitMessage = ZIMKitMessage(with: message)
+        for delegate in delegates.allObjects {
+            if let method = delegate.onMessagePreSending {
+                guard let msg = method(kitMessage) else { return }
+                kitMessage = msg
+            }
+        }
+        kitMessage.info.senderUserName = localUser?.name
+        kitMessage.info.senderUserAvatarUrl = localUser?.avatarUrl
+        
+        let mMsg = ZIMKitMessage(with: message)
+//        mMsg.info.conversationID = conversationID
+//        self.messageList.add([mMsg])
+        for delegate in self.delegates.allObjects {
+            delegate.onMessageSentStatusChanged?(mMsg)
+        }
+        
+        if router == .sendGift {
+            var params = Defaults.haveSendGiftReplyMessageDic
+            if let timestamp = params[conversationID] ?? 0, timestamp.isToday() {
+
+                return
+            } else {
+                params[conversationID] = Date.currentSecondTimeStamp
+                Defaults.haveSendGiftReplyMessageDic = params
+            }
+        }
+        
+        zim?.insertMessageToLocalDB(message, conversationID: conversationID, conversationType: .peer, senderUserID: localUser?.id ?? "", callback: { zimMessage, error in
+            let msg = self.messageList.get(with: zimMessage)
+            msg.update(with: zimMessage)
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(msg)
+            }
+            callback?(error)
+        })
+    }
+    
     
     func sendTextMessage(_ text: String,
                          to conversationID: String,
@@ -70,8 +144,12 @@ extension ZIMKitCore {
         kitMessage.info.senderUserName = localUser?.name
         kitMessage.info.senderUserAvatarUrl = localUser?.avatarUrl
         
+        let pushConfig = ZIMPushConfig()
+        pushConfig.title = localUser?.name ?? ""
+        pushConfig.content = text
         let config = ZIMMessageSendConfig()
         let notification = ZIMMessageSendNotification()
+        config.pushConfig = pushConfig
         notification.onMessageAttached = { message in
             let message = ZIMKitMessage(with: message)
             self.messageList.add([message])
@@ -79,7 +157,143 @@ extension ZIMKitCore {
                 delegate.onMessageSentStatusChanged?(message)
             }
         }
+        MCTrackManager.shared.track(body: ["data": "im_send",
+                                           "type": "text"])
         zim?.sendMessage(message, toConversationID: conversationID, conversationType: type, config: config, notification: notification, callback: { message, error in
+            let msg = self.messageList.get(with: message)
+            msg.update(with: message)
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(msg)
+            }
+            callback?(error)
+        })
+    }
+    
+    func sendCallMessage(_ msgType: MCMessageType,
+                         to conversationID: String) {
+        
+        let params = ["msgType": msgType.rawValue]
+        let textMessage = ZIMTextMessage(message: params.jsonString)
+        var kitMessage = ZIMKitMessage(with: textMessage)
+        for delegate in delegates.allObjects {
+            if let method = delegate.onMessagePreSending {
+                guard let msg = method(kitMessage) else { return }
+                kitMessage = msg
+            }
+        }
+        kitMessage.info.senderUserName = localUser?.name
+        kitMessage.info.senderUserAvatarUrl = localUser?.avatarUrl
+        
+        let config = ZIMMessageSendConfig()
+        config.priority = .medium
+        let notification = ZIMMessageSendNotification()
+        notification.onMessageAttached = { [weak self] message in
+            guard let self else { return }
+            let message = ZIMKitMessage(with: message)
+            self.messageList.add([message])
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(message)
+            }
+        }
+        
+        zim?.sendMessage(textMessage, toConversationID: conversationID, conversationType: .peer, config: config, notification: notification, callback: { [weak self] message, error in
+            guard let self else { return }
+            let msg = self.messageList.get(with: message)
+            msg.update(with: message)
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(msg)
+            }
+        })
+    }
+    
+    func sendFollowMessage(_ beFollowId: String,
+                           beFollowName: String,
+                           followId: String,
+                           followName: String,
+                           conversationID: String,
+                           callback: MessageSentCallback? = nil) {
+        
+        let params = ["message": ["beFollowId": beFollowId,
+                                  "beFollowName": beFollowName,
+                                  "followId": followId,
+                                  "followName": followName],
+                      "msgType": MCMessageType.follow.rawValue] as [String : Any]
+        
+        let textMessage = ZIMTextMessage(message: params.jsonString)
+        var kitMessage = ZIMKitMessage(with: textMessage)
+        for delegate in delegates.allObjects {
+            if let method = delegate.onMessagePreSending {
+                guard let msg = method(kitMessage) else { return }
+                kitMessage = msg
+            }
+        }
+        kitMessage.info.senderUserName = localUser?.name
+        kitMessage.info.senderUserAvatarUrl = localUser?.avatarUrl
+        
+        let config = ZIMMessageSendConfig()
+        config.priority = .medium
+        let notification = ZIMMessageSendNotification()
+        notification.onMessageAttached = { [weak self] message in
+            guard let self else { return }
+            let message = ZIMKitMessage(with: message)
+            self.messageList.add([message])
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(message)
+            }
+        }
+        
+        zim?.sendMessage(textMessage, toConversationID: conversationID, conversationType: .peer, config: config, notification: notification, callback: { [weak self] message, error in
+            guard let self else { return }
+            let msg = self.messageList.get(with: message)
+            msg.update(with: message)
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(msg)
+            }
+            callback?(error)
+        })
+    }
+    
+    func sendCustomMessage(_ giftName: String,
+                           giftId: String,
+                           giftNum: Int,
+                           giftImage: String,
+                           giftPrice: Int,
+                         to conversationID: String,
+                         callback: MessageSentCallback? = nil) {
+        
+        let params = ["giftId": giftId,
+                      "giftName": giftName,
+                      "giftPrice": giftPrice,
+                      "giftNum": giftNum,
+                      "giftImage": giftImage,
+                      "fromName": UserManager.user?.nickName ?? ""] as [String : Any]
+        
+        let textMessage = ZIMTextMessage(message: params.jsonString)
+        var kitMessage = ZIMKitMessage(with: textMessage)
+        for delegate in delegates.allObjects {
+            if let method = delegate.onMessagePreSending {
+                guard let msg = method(kitMessage) else { return }
+                kitMessage = msg
+            }
+        }
+        kitMessage.info.senderUserName = localUser?.name
+        kitMessage.info.senderUserAvatarUrl = localUser?.avatarUrl
+        
+        let config = ZIMMessageSendConfig()
+        config.priority = .medium
+        let notification = ZIMMessageSendNotification()
+        notification.onMessageAttached = { [weak self] message in
+            guard let self else { return }
+            let message = ZIMKitMessage(with: message)
+            self.messageList.add([message])
+            for delegate in self.delegates.allObjects {
+                delegate.onMessageSentStatusChanged?(message)
+            }
+        }
+        MCTrackManager.shared.track(body: ["data": "im_send",
+                                           "type": "gift"])
+        zim?.sendMessage(textMessage, toConversationID: conversationID, conversationType: .peer, config: config, notification: notification, callback: { [weak self] message, error in
+            guard let self else { return }
             let msg = self.messageList.get(with: message)
             msg.update(with: message)
             for delegate in self.delegates.allObjects {
@@ -113,6 +327,8 @@ extension ZIMKitCore {
         let filePath = generateFilePath(imagePath, conversationID, type, .image)
         try? FileManager.default.copyItem(atPath: imagePath, toPath: filePath)
         
+        MCTrackManager.shared.track(body: ["data": "im_send",
+                                           "type": "image"])
         let imageMessage = ZIMImageMessage(fileLocalPath: filePath)
         sendMediaMessage(imageMessage,
                          to: conversationID,
@@ -138,6 +354,9 @@ extension ZIMKitCore {
         if audioDuration == 0 {
             audioDuration = UInt32(AVTool.getDurationOfMediaFile(audioPath))
         }
+        
+        MCTrackManager.shared.track(body: ["data": "im_send",
+                                           "type": "voice"])
         
         let audioMessage = ZIMAudioMessage(fileLocalPath: filePath, audioDuration: audioDuration)
         sendMediaMessage(audioMessage, to: conversationID, type: type, callback: callback)
@@ -200,7 +419,8 @@ extension ZIMKitCore {
         
         let config = ZIMMessageSendConfig()
         let notification = ZIMMediaMessageSendNotification()
-        notification.onMessageAttached = { message in
+        notification.onMessageAttached = { [weak self] message in
+            guard let self else { return }
             let message = ZIMKitMessage(with: message)
             self.updateKitMessageMediaProperties(message)
             self.messageList.add([message])
@@ -208,7 +428,8 @@ extension ZIMKitCore {
                 delegate.onMessageSentStatusChanged?(message)
             }
         }
-        notification.onMediaUploadingProgress = { message, currentSize, totalSize in
+        notification.onMediaUploadingProgress = { [weak self] message, currentSize, totalSize in
+            guard let self else { return }
             let message = self.messageList.get(with: message)
             message.updateUploadProgress(currentSize: currentSize, totalSize: totalSize)
             let isFinished: Bool = currentSize == totalSize
@@ -221,7 +442,8 @@ extension ZIMKitCore {
                               conversationType: type,
                               config: config,
                               notification: notification,
-                              callback: { message, error in
+                              callback: { [weak self] message, error in
+            guard let self else { return }
             let msg = self.messageList.get(with: message)
             msg.update(with: message)
             for delegate in self.delegates.allObjects {
@@ -244,8 +466,9 @@ extension ZIMKitCore {
             callback?(error)
             return
         }
-        zim?.downloadMediaFile(with: zimMessage, fileType: .originalFile, progress: { msg, currentSize, totalSize in
+        zim?.downloadMediaFile(with: zimMessage, fileType: .originalFile, progress: { [weak self] msg, currentSize, totalSize in
             
+            guard let self else { return }
             let message = self.messageList.get(with: msg)
             message.updateDownloadProgress(currentSize: currentSize, totalSize: totalSize)
             
@@ -253,7 +476,8 @@ extension ZIMKitCore {
                 delegate.onMediaMessageDownloadingProgressUpdated?(message, isFinished:false)
             }
 
-        }, callback: { message, error in
+        }, callback: {[weak self] message, error in
+            guard let self else { return }
             let msg = self.messageList.get(with: message)
             msg.update(with: message)
             let isFinished: Bool = error.code == .success
@@ -286,7 +510,6 @@ extension ZIMKitCore {
         
         zim?.deleteMessages(zimMessages, conversationID: conversationID, conversationType: type, config: config, callback: { _, _, error in
             callback?(error)
-            
             if error.code != .success { return }
             for message in messages {
                 if FileManager.default.fileExists(atPath: message.fileLocalPath) {
